@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   encodeClaudeProjectPath,
   encodeClaudeProjectPaths,
+  findClaudeTranscriptProjectFolder,
   isClaudeProjectDirInScope
 } from './claude-project-dir-encoding'
 
@@ -49,5 +50,56 @@ describe('isClaudeProjectDirInScope', () => {
   it('rejects a sibling that merely starts with the prefix', () => {
     // Without the boundary, "orca" would absorb every workspace under "orcadyne".
     expect(isClaudeProjectDirInScope('-w-orcadyne-nautilus', ['-w-orca'])).toBe(false)
+  })
+})
+
+describe('findClaudeTranscriptProjectFolder', () => {
+  const transcript = '/Users/ada/.claude-b/projects/-Users-ada-orca/0195f2ce.jsonl'
+
+  it('walks up from a sub-folder the agent moved into to the folder the session is filed under', () => {
+    expect(
+      findClaudeTranscriptProjectFolder(transcript, ['/Users/ada/orca/src/deep', '/Users/ada'])
+    ).toBe('/Users/ada/orca')
+  })
+
+  it('keeps a session started in a sub-folder in that sub-folder', () => {
+    const subFolderTranscript = '/Users/ada/.claude/projects/-Users-ada-orca-docs/0195f2ce.jsonl'
+
+    expect(
+      findClaudeTranscriptProjectFolder(subFolderTranscript, [
+        '/Users/ada/orca/docs',
+        '/Users/ada/orca'
+      ])
+    ).toBe('/Users/ada/orca/docs')
+  })
+
+  it('falls through to a later candidate when an earlier one lies in another project', () => {
+    expect(
+      findClaudeTranscriptProjectFolder(transcript, ['/Users/ada/other/src', '/Users/ada/orca'])
+    ).toBe('/Users/ada/orca')
+  })
+
+  it('keeps Windows separators and the drive root', () => {
+    const windowsTranscript = 'C:\\Users\\ada\\.claude\\projects\\C--work-orca\\0195f2ce.jsonl'
+
+    expect(findClaudeTranscriptProjectFolder(windowsTranscript, ['C:\\work\\orca\\src'])).toBe(
+      'C:\\work\\orca'
+    )
+  })
+
+  it('reports nothing when no candidate matches or the path is not a Claude transcript', () => {
+    expect(
+      findClaudeTranscriptProjectFolder(transcript, ['/Users/ada/other', undefined])
+    ).toBeNull()
+    expect(
+      findClaudeTranscriptProjectFolder('/tmp/-Users-ada-orca/0195f2ce.jsonl', ['/Users/ada/orca'])
+    ).toBeNull()
+    expect(findClaudeTranscriptProjectFolder(undefined, ['/Users/ada/orca'])).toBeNull()
+    // A UNC walk stops at the share, so a bucket for `/` never names a folder above it.
+    expect(
+      findClaudeTranscriptProjectFolder('/u/.claude/projects/-/0195f2ce.jsonl', [
+        '\\\\srv\\share\\a'
+      ])
+    ).toBeNull()
   })
 })
