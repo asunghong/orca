@@ -87,6 +87,23 @@ describe('findClaudeTranscriptProjectFolder', () => {
     )
   })
 
+  it('reports nothing when the bucket name fits two distinct folders', () => {
+    const ambiguousTranscript = '/home/dev/.claude/projects/-home-dev-foo-bar/0195f2ce.jsonl'
+
+    expect(
+      findClaudeTranscriptProjectFolder(ambiguousTranscript, [
+        '/home/dev/foo/bar/src',
+        '/home/dev/foo-bar'
+      ])
+    ).toBeNull()
+  })
+
+  it('counts a folder reached from two candidates once', () => {
+    expect(
+      findClaudeTranscriptProjectFolder(transcript, ['/Users/ada/orca/src', '/Users/ada/orca/'])
+    ).toBe('/Users/ada/orca')
+  })
+
   it('reports nothing when no candidate matches or the path is not a Claude transcript', () => {
     expect(
       findClaudeTranscriptProjectFolder(transcript, ['/Users/ada/other', undefined])

@@ -23,7 +23,9 @@ export function encodeClaudeProjectPath(pathValue: string): string {
 /**
  * The folder, among `candidates` and their parents, that Claude filed `transcriptPath` under.
  * Why: Claude keeps a session in `projects/<encoded launch folder>/` and `--resume` reads only the
- * bucket of the folder it starts in. Null for a path outside `projects/` or when nothing matches.
+ * bucket of the folder it starts in. Null for a path outside `projects/`, when nothing matches, or
+ * when the bucket name fits more than one distinct folder (`/a/foo-bar` and `/a/foo/bar` both
+ * encode to `-a-foo-bar`), so the caller keeps its existing choice instead of guessing.
  */
 export function findClaudeTranscriptProjectFolder(
   transcriptPath: string | undefined,
@@ -34,14 +36,21 @@ export function findClaudeTranscriptProjectFolder(
   if (!bucket) {
     return null
   }
+  const matches = new Map<string, string>()
   for (const candidate of candidates) {
     for (let folder = candidate || null; folder; folder = parentFolder(folder)) {
       if (encodeClaudeProjectPaths(folder).includes(bucket)) {
-        return folder
+        const key = normalizeRuntimePathSeparators(folder).replace(/\/+$/, '') || '/'
+        if (!matches.has(key)) {
+          matches.set(key, folder)
+        }
       }
     }
   }
-  return null
+  if (matches.size !== 1) {
+    return null
+  }
+  return matches.values().next().value ?? null
 }
 
 /** Keeps the path's own separators and its root: `/a` → `/`, `C:\a` → `C:\`, `/` → null. */
